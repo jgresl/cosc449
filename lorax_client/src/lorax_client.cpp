@@ -1,44 +1,43 @@
 #include <Arduino.h>
+#include <Adafruit_BME280.h>
+#include <Adafruit_Sensor.h>
+#include <RHReliableDatagram.h>
+#include <RH_RF95.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <RH_RF95.h>
-#include <RHReliableDatagram.h>
 #include <rtcZero.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
-#include "Queue.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "lorax_buffer.h"
+#include "string_helper.h"
 
 /* Feather M0 wiring configurations */
-#define RF95_CHIP_SELECT_PIN        8
-#define RF95_INTERRUPT_PIN          3
-#define RF95_RESET_PIN              4
-#define VBATPIN                     A7        // Voltage pin to determine battery life
+#define RF95_CHIP_SELECT_PIN 8
+#define RF95_INTERRUPT_PIN 3
+#define RF95_RESET_PIN 4
+#define VBATPIN A7  // Voltage pin to determine battery life
 
 /* LoRa radio configurations */
-#define RF95_FREQUENCY              915.0     // Between 137.0 and 1020.0   (Default = 915 Mhz)
-#define RF95_TRANSMISSION_POWER     20        // Between 5 and 23           (Default = 13 Db)
-#define RF95_CAD_TIMEOUT            10000     // Greater or equal to 0      (Default = 0 ms)
-#define RF95_SPREADING_FACTOR       12        // Between 6 and 12           (Default = ?)             --> Overwritten by setModemConfig()
-#define RF95_BANDWIDTH              125000    // Between 7800 and 500000    (Default = 125000 Hz)     --> Overwritten by setModemConfig()
-#define RF95_PREAMBLE_LENGTH        8         //                            (Default = 8)
-#define RF95_SYNC_WORD              0x39      //                            (Default = 0x39)
-#define RF95_CODING_RATE            5         // Between 5 and 8            (Default = 5-bit)         --> Overwritten by setModemConfig()
-#define RF95_RESTRANSMIT_RETRIES    3         //                            (Default = 3)
-#define RF95_RESTRANSMIT_TIMEOUT    500       //                            (Default = 200 ms)
-#define RF95_GATEWAY_ID             100       // Assign unique ID to gateway
+#define RF95_FREQUENCY 915.0          // Between 137.0 and 1020.0   (Default = 915 Mhz)
+#define RF95_TRANSMISSION_POWER 20    // Between 5 and 23           (Default = 13 Db)
+#define RF95_CAD_TIMEOUT 10000        // Greater or equal to 0      (Default = 0 ms)
+#define RF95_SPREADING_FACTOR 12      // Between 6 and 12           (Default = ?)             --> Overwritten by setModemConfig()
+#define RF95_BANDWIDTH 125000         // Between 7800 and 500000    (Default = 125000 Hz)     --> Overwritten by setModemConfig()
+#define RF95_PREAMBLE_LENGTH 8        //                            (Default = 8)
+#define RF95_SYNC_WORD 0x39           //                            (Default = 0x39)
+#define RF95_CODING_RATE 5            // Between 5 and 8            (Default = 5-bit)         --> Overwritten by setModemConfig()
+#define RF95_RESTRANSMIT_RETRIES 3    //                            (Default = 3)
+#define RF95_RESTRANSMIT_TIMEOUT 500  //                            (Default = 200 ms)
+#define RF95_GATEWAY_ID 100           // Assign unique ID to gateway
 
 /* Declare functions */
 void initialize_node();
-void clearSerial();
 void sync_with_gateway();
-void log_sensor_readings();
-void print_payload_queue();
-void log_payload(char *);
-void transmit_payloads();
-void substring(char *, char *, int, int);
+void log_samples();
+void transmit_samples();
 void set_date_time(char *);
 const char *get_date_time(char *);
-const char *two_digits(int, char *);
 void set_new_alarm();
 
 /* Create an instance of the real time clock */
@@ -53,53 +52,51 @@ RHReliableDatagram manager(rf95);
 /* Create instance of BME280 sensor */
 Adafruit_BME280 bme;
 
+/* Create a queue to log the sensor readings (uint8_t[100] : max = 200 elements) */
+lorax_buffer *all_samples = create_buffer(150, 100);
+
 /* Gloabal variables */
 int node_id = 0;
-int celsius = 0;
-int16_t lastRssi = -1;
-char date_time_on_sync[19], sampling_rate_temp[3], transmission_delay_temp[3], temperature_reading[150];
-Queue *pointerToQueue = createQueue(150, 50);
-float batteryVoltage;
-int batteryPercent;
+int sample_number = 1;
+char date_time_on_sync[19];
 
 void setup() {
     /* Initialize the real time clock */
     rtc.begin();
 
-    /* Initialize LoRa radio with defined configurations */
-    initialize_node();
-    
     /* Begin BME280 sensor */
     bme.begin(0x76);
 
-    /* Setup interrupt for taking samples */
-    rtc.setAlarmSeconds(14);
-    rtc.enableAlarm(rtc.MATCH_SS);
-    rtc.attachInterrupt(log_sensor_readings);
+    /* Initialize LoRa radio with defined configurations */
+    initialize_node();
 
     /* Sync node with gateway */
     while (node_id == 0) {
         sync_with_gateway();
     }
 
-    delay(500);
+    /* Setup interrupt for taking samples */
+    rtc.setAlarmSeconds(59);
+    rtc.enableAlarm(rtc.MATCH_SS);
+    rtc.attachInterrupt(log_samples);
+
+    delay(1000);
 }
 
 void loop() {
     /* Get total seconds since device startup */
     uint8_t totalSeconds = rtc.getHours() * 3600 + rtc.getMinutes() * 60 + rtc.getSeconds();
 
-    /* Transmit payload queue every 20 seconds */
-    if (node_id > 0 && totalSeconds % 20 == 0) {
-        transmit_payloads();
+    /* Transmit samples every 20 seconds */
+    if (node_id > 0 && totalSeconds % 65 == 0) {
+        transmit_samples();
     }
 
     /* Delay to prevent loop from running more than once per a second */
     delay(1000);
 }
 
-void initialize_node() {
-    /* Manual reset on radio module */
+void initialize_node() { /* Manual reset on radio module */
     pinMode(RF95_RESET_PIN, OUTPUT);
     digitalWrite(RF95_RESET_PIN, LOW);
     delay(10);
@@ -110,7 +107,8 @@ void initialize_node() {
     Serial.printf("Radio:       ");
     while (!manager.init()) {
         Serial.printf("Failed\n");
-        while (1);
+        while (1)
+            ;
     }
     Serial.printf("Initialized\n");
 
@@ -162,7 +160,7 @@ void initialize_node() {
     /* Set modem configuration */
     if (!rf95.setModemConfig(RH_RF95::Bw500Cr45Sf128)) {
         Serial.print("Invalid setModemConfig() option\n");
-    } else {    
+    } else {
         Serial.printf("Bandwidth:   ");
         Serial.printf("%d Hz\n", 125000);
 
@@ -172,7 +170,7 @@ void initialize_node() {
         Serial.printf("Spreading:   ");
         Serial.printf("%d c/s\n", 128);
     }
-    
+
     /* Set amount of transmit retries */
     Serial.printf("Retries:     ");
     manager.setRetries(RF95_RESTRANSMIT_RETRIES);
@@ -182,23 +180,6 @@ void initialize_node() {
     Serial.printf("Retry time:  ");
     manager.setTimeout(RF95_RESTRANSMIT_TIMEOUT);
     Serial.printf("%d ms\n", RF95_RESTRANSMIT_TIMEOUT);
-}
-
-void substring(char *source_string, char *sub_string, int sub_string_start, int sub_string_length) {
-    int char_index = 0;
-
-    while (char_index < sub_string_length) {
-        sub_string[char_index] = source_string[sub_string_start + char_index - 1];
-        char_index++;
-    }
-    sub_string[char_index] = '\0';
-}
-
-const char *get_date_time(char *date_time) {
-    char *number_string = (char *)malloc(sizeof(char) * 19);
-    sprintf(date_time, "%s%s-%s-%s %s:%s:%s", "20", two_digits(rtc.getYear(), number_string), two_digits(rtc.getMonth(), number_string + 3), two_digits(rtc.getDay(), number_string + 6), two_digits(rtc.getHours(), number_string + 9), two_digits(rtc.getMinutes(), number_string + 12), two_digits(rtc.getSeconds(), number_string + 15));
-    free(number_string);
-    return date_time;
 }
 
 void sync_with_gateway() {
@@ -228,68 +209,97 @@ void sync_with_gateway() {
             substring((char *)node_id_response, date_time_on_sync, 30, 19);
             set_date_time(date_time_on_sync);
             Serial.printf("\t\t\tdate_time_on_sync set to %s\n", date_time_on_sync);
-
-            /* Create interrupt to periodically log sensor_readings */
-            rtc.setAlarmSeconds(14);
-            rtc.enableAlarm(rtc.MATCH_SS);
-            rtc.attachInterrupt(log_sensor_readings);
         }
     }
 }
 
-void printElement(void *element) {
-    Serial.printf("%s\n", (char *) element);
-}
-
-void log_sensor_readings() {
+void log_samples() {
     /* Read values from sensors */
-    Serial.print("\nTaking sensor readings...");
-    celsius = (int) bme.readTemperature();
-    
+    Serial.print("\nTaking sensor samples...\n");
+    int celsius = bme.readTemperature();
+    int humidity = bme.readHumidity();
+    int pressure = bme.readPressure();
+
+    /* Read battery voltage */
+    float battery = analogRead(VBATPIN);
+    battery *= 2;     // we divided by 2, so multiply back
+    battery *= 3.3;   // Multiply by 3.3V, our reference voltage
+    battery /= 1024;  // convert to voltage
+    int battery100 = battery * 100;
+
     /* Prepare payloads */
-    Serial.print("\nPreparing payloads...");
+    Serial.print("\nPreparing JSON samples...\n");
+    /* Current Time */
     char *date_time = (char *)malloc(sizeof(char) * 19);
-    sprintf(temperature_reading, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\"}", node_id, 'T', get_date_time(date_time), celsius);
+    get_date_time(date_time);
+    /* Temperature */
+    char temperature_sample[150];
+    sprintf(temperature_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'T', date_time, celsius, sample_number);
+    sample_number++;
+    Serial.println(temperature_sample);
+    /* Humidity */
+    char humidity_sample[150];
+    sprintf(humidity_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'H', date_time, humidity, sample_number);
+    sample_number++;
+    Serial.println(humidity_sample);
+    /* Air Pressure */
+    char pressure_sample[150];
+    sprintf(pressure_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'P', date_time, pressure, sample_number);
+    sample_number++;
+    Serial.println(pressure_sample);
+    /* Battery */
+    char battery_sample[150];
+    sprintf(battery_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'B', date_time, battery100, sample_number);
+    sample_number++;
+    Serial.println(battery_sample);
+
     free(date_time);
 
-    /* Log payloads */
-    Serial.println("\nLogging payloads...");
-    enqueue(pointerToQueue, temperature_reading);
+    /* Store payloads */
+    Serial.println("\nLogging JSON samples...");
+    store_sample(all_samples, (uint8_t *)temperature_sample);
+    store_sample(all_samples, (uint8_t *)humidity_sample);
+    store_sample(all_samples, (uint8_t *)pressure_sample);
+    store_sample(all_samples, (uint8_t *)battery_sample);
+    print_buffer(all_samples);
 
-    set_new_alarm();
+    /* Set new interupt timing (used when sampling every 15 seconds) */
+    //set_new_alarm();
 }
 
-void transmit_payloads()
-{
-    Serial.println("Transmitting payload queue...");
-    void *memoryLocationForQueueElement = malloc(pointerToQueue->sizeOfDataElement);
-    while (pointerToQueue->size > 0)
-    {
-        //Store the first element (the one being tranmitted) in the Queue and print it
-        dequeue(pointerToQueue, memoryLocationForQueueElement);
-        //If transmitted successfully
-        if (manager.sendtoWait((uint8_t *)memoryLocationForQueueElement, pointerToQueue->sizeOfDataElement, RF95_GATEWAY_ID))
-        {
-            lastRssi = rf95.lastRssi();
-            Serial.printf("\nTransmission acknowledged", lastRssi);
-            Serial.printf("             Last RSSI: %d\n\n", rf95.lastRssi());  
-        }
-        else
-        //Store the element back at the end of the queue
-        {
-            enqueue(pointerToQueue, memoryLocationForQueueElement);
+void transmit_samples() {
+    Serial.println("\nTransmitting samples...");
+    void *memoryLocationForQueueElement = malloc(all_samples->__element_size);
+    uint16_t size = all_samples->__size;
+    
+    for (uint16_t i = 0; i < size; i++) {   
+        // Store the first element (the one being tranmitted) in the Queue and print it
+        peek_sample(all_samples, (uint8_t *)memoryLocationForQueueElement);
+        // If transmitted successfully
+        if (manager.sendtoWait((uint8_t *)memoryLocationForQueueElement, all_samples->__element_size, RF95_GATEWAY_ID)) {
+            Serial.printf("Transmission acknowledged");
+            Serial.printf("   Last RSSI: %d\n", rf95.lastRssi());
+            remove_sample(all_samples, (uint8_t *)memoryLocationForQueueElement);
+        } else {
+            // Store the element back at the end of the queue
+            Serial.printf("Transmitting element %d: <no acknowledgment>\n", i);
         }
     }
     free(memoryLocationForQueueElement);
 }
 
-const char *two_digits(int number, char *number_string) {
-    if (number < 10) {
-        sprintf(number_string, "0%d", number);
-    } else {
-        sprintf(number_string, "%d", number);
-    }
-    return number_string;
+const char *get_date_time(char *date_time) {
+    char *number_string = (char *)malloc(sizeof(char) * 19);
+    sprintf(
+        date_time, "%s%s-%s-%s %s:%s:%s", "20",
+        two_digits(rtc.getYear(), number_string),
+        two_digits(rtc.getMonth(), number_string + 3),
+        two_digits(rtc.getDay(), number_string + 6),
+        two_digits(rtc.getHours(), number_string + 9),
+        two_digits(rtc.getMinutes(), number_string + 12),
+        two_digits(rtc.getSeconds(), number_string + 15));
+    free(number_string);
+    return date_time;
 }
 
 void set_date_time(char *date_time_on_sync) {
@@ -323,17 +333,17 @@ void set_date_time(char *date_time_on_sync) {
 
 void set_new_alarm() {
     switch (rtc.getAlarmSeconds()) {
-    case 14:
-        rtc.setAlarmSeconds(29);
-        break;
-    case 29:
-        rtc.setAlarmSeconds(44);
-        break;
-    case 44:
-        rtc.setAlarmSeconds(59);
-        break;
-    case 59:
-        rtc.setAlarmSeconds(14);
-        break;
+        case 14:
+            rtc.setAlarmSeconds(29);
+            break;
+        case 29:
+            rtc.setAlarmSeconds(44);
+            break;
+        case 44:
+            rtc.setAlarmSeconds(59);
+            break;
+        case 59:
+            rtc.setAlarmSeconds(14);
+            break;
     }
 }

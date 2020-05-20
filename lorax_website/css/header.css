@@ -1,0 +1,137 @@
+header {
+    height: 50px;
+    background-color: white;
+    border-bottom: 3px solid #9B6700;
+}
+
+#masthead {
+    width: 59%;
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+}
+
+#search {
+    flex: 3;
+    width: 50%;
+    padding: 0.5em;
+    display: flex;
+}
+
+#searchField {
+    width: 100%;
+    border: 3px solid #FF7400;
+    border-right: none;
+    padding: 5px;
+    height: 19px;
+    border-radius: 5px 0 0 5px;
+    color: grey;
+    min-width: 60px;
+    min-width: 160px;
+}
+
+#searchField:focus {
+    color: black;
+    font-weight: bold;
+}
+
+#searchButton {
+    width: 40px;
+    height: 35px;
+    border: 1px solid #FF7400;
+    background: #FF7400;
+    text-align: center;
+    color: white;
+    border-radius: 0 5px 5px 0;
+    cursor: pointer;
+    font-size: 20px;
+    padding-top: 7px;
+}
+
+.navButton {
+    flex: 1;
+    height: 20px;
+    min-width: 80px;
+    padding: 5px;
+    text-align: center;
+    margin: 0.5em;
+    border: 3px solid #FF7400;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+#loginButton {
+    color: #FF7400;
+}
+
+#loginButton:hover {
+    color:  #9b0000;
+}
+
+#signupButton {
+    background-color: #FF7400;
+    color: white;
+    position: flex;
+    right: 100%;
+}
+
+#signupButton:hover {
+    background-color: #FFAA63;
+    border-color: #FFAA63;
+}
+
+#signupButton a {
+    color: white;
+}
+
+#signupButton a:hover {
+    background-color: #FFAA63;
+}
+
+.dropbtn {
+    background-color: white;
+    color: black;
+    font-size: 1em;
+    cursor: pointer;
+    min-width: 160px;
+    height: 35px;
+    padding: 5px;
+    margin: 0.5em;
+    border: 3px solid #FF7400;
+    border-radius: 5px;
+    font-weight: bold;
+  }
+  
+.dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  
+.dropdown-content {
+    margin-left: 0.5em;
+    display: none;
+    position: absolute;
+    background-color: #9b0000;
+    font-weight: bold;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.7);
+    z-index: 1;
+  }
+  
+.dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+    color: white;
+  }
+  
+.dropdown-content a:hover {
+    background-color: white;
+    color: #9b0000;
+}
+  
+.dropdown:hover .dropdown-content {
+    display: block;
+  }
+  
