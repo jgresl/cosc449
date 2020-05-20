@@ -3,7 +3,7 @@
 
 <head lang="en">
    <meta charset="utf-8">
-   <title>Scratch Post</title>
+   <title>LoRaX Gateway</title>
    <link rel="icon" href="images/favicon.png" type="image/x-icon">
    <link rel="stylesheet" href="css/reset.css">
    <link rel="stylesheet" href="css/main.css">
@@ -52,7 +52,7 @@
                      echo '</table>';
                   echo '</article>';
 
-                  if ($enabled_posts == 0) {
+                  if ($samples == 0) {
                      echo '<article>';
                         echo '<p>There are no samples to display</p>';
                      echo '</article>';
