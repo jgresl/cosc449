@@ -39,6 +39,7 @@ void transmit_samples();
 void set_date_time(char *);
 const char *get_date_time(char *);
 void set_new_alarm();
+void set_next_sample_minute(int);
 
 /* Create an instance of the real time clock */
 RTCZero rtc;
@@ -58,6 +59,7 @@ lorax_buffer *all_samples = create_buffer(150, 100);
 /* Gloabal variables */
 int node_id = 0;
 int sample_number = 1;
+int sample_frequency, transmission_frequency;
 char date_time_on_sync[19];
 
 void setup() {
@@ -76,8 +78,9 @@ void setup() {
     }
 
     /* Setup interrupt for taking samples */
+    rtc.setAlarmMinutes(rtc.getMinutes() + sample_frequency - 1);
     rtc.setAlarmSeconds(59);
-    rtc.enableAlarm(rtc.MATCH_SS);
+    rtc.enableAlarm(rtc.MATCH_MMSS);
     rtc.attachInterrupt(log_samples);
 
     delay(1000);
@@ -87,8 +90,8 @@ void loop() {
     /* Get total seconds since device startup */
     uint8_t totalSeconds = rtc.getHours() * 3600 + rtc.getMinutes() * 60 + rtc.getSeconds();
 
-    /* Transmit samples every 20 seconds */
-    if (node_id > 0 && totalSeconds % 65 == 0) {
+    /* Transmit samples every [transmission_frequency] minutes */
+    if (node_id > 0 && totalSeconds % (1 + 60 * transmission_frequency) == 0) {
         transmit_samples();
     }
 
@@ -185,14 +188,14 @@ void initialize_node() { /* Manual reset on radio module */
 void sync_with_gateway() {
     /* Request node_id and date_time from gateway */
     const uint32_t *serial_number_words[4] = {(uint32_t *)0x0080A00C, (uint32_t *)0x0080A040, (uint32_t *)0x0080A044, (uint32_t *)0x0080A048};
-    char serial_number[130];
+    char serial_number[150];
     sprintf((char *)serial_number, "%lu %lu %lu %lu", *serial_number_words[0], *serial_number_words[1], *serial_number_words[2], *serial_number_words[3]);
 
     Serial.print("\nSending to gateway:\t");
     Serial.println((char *)serial_number);
     if (manager.sendtoWait((uint8_t *)serial_number, sizeof(serial_number), RF95_GATEWAY_ID)) {
         /* Receive response from gateway */
-        uint8_t node_id_response[RH_RF95_MAX_MESSAGE_LEN];
+        uint8_t node_id_response[150];
         uint8_t response_length = sizeof(node_id_response);
         uint8_t gateway_id;
         if (manager.recvfromAckTimeout(node_id_response, &response_length, 2000, &gateway_id)) {
@@ -200,10 +203,14 @@ void sync_with_gateway() {
             Serial.print("Received from gateway:\t");
             Serial.println((char *)node_id_response);
 
-            /* Store node_id and change address of RHReliable datagram driver */
+            /* Store node_data and change address of RHReliable datagram driver */
             node_id = (char)node_id_response[12] - 48;
-            manager.setThisAddress(node_id);
+            sample_frequency = (char)node_id_response[61] - 48;
+            transmission_frequency = (char)node_id_response[77] - 48;
             Serial.printf("\n\t\t\tnode_id set to %d\n", node_id);
+            Serial.printf("\t\t\tsample_frequency set to %d\n", sample_frequency);            
+            Serial.printf("\t\t\ttransmission_frequency set to %d\n", transmission_frequency);
+            manager.setThisAddress(node_id);
 
             /* Store date_time_on_sync and millis_elapsed_on_sync */
             substring((char *)node_id_response, date_time_on_sync, 30, 19);
@@ -215,7 +222,7 @@ void sync_with_gateway() {
 
 void log_samples() {
     /* Read values from sensors */
-    Serial.print("\nTaking sensor samples...\n");
+    Serial.printf("\nTaking sensor samples (every %d minutes)...\n", sample_frequency);
     int celsius = bme.readTemperature();
     int humidity = bme.readHumidity();
     int pressure = bme.readPressure();
@@ -265,10 +272,13 @@ void log_samples() {
 
     /* Set new interupt timing (used when sampling every 15 seconds) */
     //set_new_alarm();
+
+    /* Set new interupt timing (used when sampling every [sample_frequency] minutes) */
+    set_next_sample_minute(sample_frequency);
 }
 
 void transmit_samples() {
-    Serial.println("\nTransmitting samples...");
+    Serial.printf("\nTransmitting samples (every %d minutes)...\n", transmission_frequency);
     void *memoryLocationForQueueElement = malloc(all_samples->__element_size);
     uint16_t size = all_samples->__size;
     
@@ -346,4 +356,10 @@ void set_new_alarm() {
             rtc.setAlarmSeconds(14);
             break;
     }
+}
+
+void set_next_sample_minute(int sample_frequency) {
+    int current_sample_minute = rtc.getAlarmMinutes();
+    int next_sample_minute = (current_sample_minute + sample_frequency) % 60;
+    rtc.setAlarmMinutes(next_sample_minute);
 }

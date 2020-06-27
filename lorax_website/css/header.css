@@ -1,7 +1,7 @@
 header {
     height: 50px;
     background-color: white;
-    border-bottom: 3px solid #9B6700;
+    border-bottom: 3px solid black;
 }
 
 #masthead {
@@ -20,7 +20,7 @@ header {
 
 #searchField {
     width: 100%;
-    border: 3px solid #FF7400;
+    border: 3px solid grey;
     border-right: none;
     padding: 5px;
     height: 19px;
@@ -38,8 +38,8 @@ header {
 #searchButton {
     width: 40px;
     height: 35px;
-    border: 1px solid #FF7400;
-    background: #FF7400;
+    border: 1px solid grey;
+    background: grey;
     text-align: center;
     color: white;
     border-radius: 0 5px 5px 0;
@@ -55,13 +55,13 @@ header {
     padding: 5px;
     text-align: center;
     margin: 0.5em;
-    border: 3px solid #FF7400;
+    border: 3px solid grey;
     border-radius: 5px;
     font-weight: bold;
 }
 
 #loginButton {
-    color: #FF7400;
+    color: grey;
 }
 
 #loginButton:hover {
@@ -69,15 +69,15 @@ header {
 }
 
 #signupButton {
-    background-color: #FF7400;
+    background-color: grey;
     color: white;
     position: flex;
     right: 100%;
 }
 
 #signupButton:hover {
-    background-color: #FFAA63;
-    border-color: #FFAA63;
+    background-color: grey;
+    border-color: grey;
 }
 
 #signupButton a {
@@ -85,7 +85,7 @@ header {
 }
 
 #signupButton a:hover {
-    background-color: #FFAA63;
+    background-color: grey;
 }
 
 .dropbtn {
@@ -97,7 +97,7 @@ header {
     height: 35px;
     padding: 5px;
     margin: 0.5em;
-    border: 3px solid #FF7400;
+    border: 3px solid grey;
     border-radius: 5px;
     font-weight: bold;
   }

@@ -8,6 +8,10 @@
    <link rel="stylesheet" href="css/reset.css">
    <link rel="stylesheet" href="css/main.css">
    <link rel="stylesheet" href="css/header.css">
+   <script type="text/javascript" src="js/admin_init_map.js"></script>
+   <script type="text/javascript" src="js/admin_modify_node.js"></script>
+   <script type="text/javascript" src="js/admin_restore_db.js"></script>
+   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD_ob_YSzpkQwwXup8Xwc2M9qT6-jytWJI&callback=initMap"></script>
 </head>
 
 <body>
@@ -15,55 +19,74 @@
       <?php include 'includes/header.php'; ?>
    </header>
    <main>
-            <?php
-               // Open the database connection
-               try {
-                  $pdo = openConnection();
-               } catch (PDOException $e) {
-                  die($e->getMessage());
-               }
-
-               // Display a table with all samples
-               include 'sql/select_samples.php';
-              
-               // Execute prepared SQL statement and store the result set
-               $statement->execute();
-
-               // Build class to store result set attributes
-               class Sample {
-                  public $sample_ID;
-                  public $node_ID;
-                  public $sensor_type;
-                  public $date_time;
-                  public $value;
-                  public $sample;
-               }
-
-               // Display a table with all samples
-               $samples = 0;
-               echo '<div id="column2">';
-                  echo '<article class="post">';
-                     echo '<table>';
-                        echo '<tr><th>sample_ID</th><th>node_ID</th><th>sensor_type</th><th>date_time</th><th>value</th><th>sample</th></tr>';
-                        while ($sample = $statement->fetchObject('Sample')) {
-                           echo "<tr><td>$sample_ID</td><td>$node_ID</td><td>$sensor_type</td><td>$date_time</td><td>$value</td><td>$sample</td></tr>";
-                           $samples++;
-                        }
-                     echo '</table>';
-                  echo '</article>';
-
-                  if ($samples == 0) {
-                     echo '<article>';
-                        echo '<p>There are no samples to display</p>';
-                     echo '</article>';
-                  }
-               
-               echo '</div>';
-
-               // Close the database connection
-               closeConnection($pdo);
-            ?>
+      <div id="column1">
+         <article id="profile">
+            <div class="banner">
+               <h1>Admin</h1>
+            </div>
+            <br>
+            <h3>Maintenance</h3>
+            <ul>
+               <li><a href="main.php?command=nodes">Manage Nodes</a></li>
+            </ul>
+            <br><br>
+            <h3>Reports</h3>
+            <ul>
+               <li><a href="main.php?command=node_map">Node Map</a></li>
+               <li><a href="main.php?command=samples">All Samples</a></li>
+            </ul>
+            <br><br>
+            <h3>Database</h3>
+            <ul>
+               <li><a href="main.php?command=diagram">ER Diagram</a></li>
+               <li><a href="main.php?command=ddl">DDL</a></li>
+               <li><a href="main.php?command=restore">Database Restore</a></li>
+            </ul>
+            <br>
+         </article>
       </div>
+      <?php
+
+      // Open the database connection
+      include 'includes/db_connection.php';
+      try {
+         $pdo = openConnection();
+      } catch (PDOException $e) {
+         die($e->getMessage());
+      }
+
+      if (isset($_GET['command'])) {
+         $command = $_GET['command'];
+         switch ($command) {
+            case "nodes":
+               include 'includes/adm_nodes.php';
+               break;
+            case "node_map":
+               include 'includes/adm_node_map.php';
+               break;
+            case "samples":
+               include 'includes/adm_samples.php';
+               break;
+            case "diagram":
+               include 'includes/adm_diagram.php';
+               break;
+            case "ddl":
+               include 'includes/adm_ddl.php';
+               break;
+            case "restore":
+               include 'includes/adm_restore.php';
+               break;
+            default:
+               include 'includes/adm_samples.php';
+               break;
+         }
+      } else {
+         include 'includes/adm_samples.php';
+      }
+
+      // Close the database connection
+      closeConnection($pdo);
+      ?>
    </main>
 </body>
 

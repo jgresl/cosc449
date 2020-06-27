@@ -2,7 +2,7 @@
 //
 // Author: Mike McCauley (mikem@airspayce.com)
 // Copyright (C) 2011 Mike McCauley
-// $Id: RHRouter.h,v 1.12 2020/04/09 23:40:34 mikem Exp mikem $
+// $Id: RHRouter.h,v 1.9 2014/08/10 20:55:17 mikem Exp $
 
 #ifndef RHRouter_h
 #define RHRouter_h
@@ -24,7 +24,7 @@
 #define RH_ROUTER_ERROR_UNABLE_TO_DELIVER 5
 
 // This size of RH_ROUTER_MAX_MESSAGE_LEN is OK for Arduino Mega, but too big for
-// Duemilanove. Size of 50 works with the sample router programs on Duemilanove.
+// Duemilanova. Size of 50 works with the sample router programs on Duemilanova.
 #define RH_ROUTER_MAX_MESSAGE_LEN (RH_MAX_MESSAGE_LEN - sizeof(RHRouter::RoutedMessageHeader))
 //#define RH_ROUTER_MAX_MESSAGE_LEN 50
 
@@ -40,9 +40,8 @@
 /// \brief RHReliableDatagram subclass for sending addressed, optionally acknowledged datagrams
 /// multi-hop routed across a network.
 ///
-/// This is a Manager class that extends RHReliableDatagram to handle addressed messages
-/// that are reliably transmitted and routed across a network of multiple RHRouter nodes.
-/// Each message is transmitted reliably 
+/// Manager class that extends RHReliableDatagram to define addressed messages
+/// That are reliably transmitted and routed across a network. Each message is transmitted reliably 
 /// between each hop in order to get from the source node to the destination node.
 ///
 /// With RHRouter, routes are hard wired. This means that each node must have programmed 
@@ -58,8 +57,8 @@
 /// (reliably) deliver the message to the next hop. By this method, messages can be delivered 
 /// across a network of nodes, even if each node cannot hear all of the others in the network.
 /// Each time a message is received for another node and retransmitted to the next hop, 
-/// the HOPS field in the header is incremented. If a message is received for routing to another node 
-/// which has exceed the routers max_hops, the message will be dropped and ignored. 
+/// the HOPS filed in teh header is incremented. If a message is received for routing to another node 
+/// which has exceed the routers max_hops, the message wioll be dropped and ignored. 
 /// This helps prevent infinite routing loops.
 ///
 /// RHRouter supports messages with a dest of RH_BROADCAST_ADDRESS. Such messages are not routed, 
@@ -177,14 +176,6 @@ public:
     /// Overrides the init() function in RH.
     /// Sets max_hops to the default of RH_DEFAULT_MAX_HOPS (30)
     bool init();
-
-
-    /// Sets the flag determining if the node will participate in routing.
-    /// if isa_router is true, the node will be a full participant. If false the node
-    /// will only respond to
-    /// packets directed to its address. The default is true.
-    /// \param[in] isa_router true or false
-    void setIsaRouter(bool isa_router);
 
     /// Sets the max_hops to the given value
     /// This controls the maximum number of hops allowed between source and destination nodes
@@ -319,9 +310,6 @@ protected:
     /// The maximum number of hops permitted in routed messages.
     /// If a routed message would exceed this number of hops it is dropped and ignored.
     uint8_t              _max_hops;
-    
-    /// Flag to set if packets are forwarded or not
-    bool _isa_router;
 
 private:
 

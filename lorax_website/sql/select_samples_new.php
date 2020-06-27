@@ -1,8 +1,23 @@
 <?php
-    // Prepared SQL statement to return all samples with the newest on top
-    $sql = "SELECT node_ID, sensor_type, date_time, value, sample
+    // Prepare SQL statement
+    $sql = "SELECT 
+                sample_ID, 
+                node_ID, 
+                CASE 
+                    WHEN sensor_type = 'H' THEN 'Humidity'
+                    WHEN sensor_type = 'T' THEN 'Temperature'
+                    WHEN sensor_type = 'B' THEN 'Battery'
+                    WHEN sensor_type = 'P' THEN 'Air Pressure'
+                    ELSE sensor_type
+                END AS sensor_type,
+                date_time,
+                value, 
+                sample
             FROM Sample
-            ORDER BY date_time DESC";
+            ORDER BY sample_ID DESC";
             
     $statement = $pdo->prepare($sql);
+
+    // Execute prepared SQL statement
+    $statement->execute();
 ?>

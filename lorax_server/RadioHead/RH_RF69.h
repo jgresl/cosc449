@@ -1,7 +1,7 @@
 // RH_RF69.h
 // Author: Mike McCauley (mikem@airspayce.com)
 // Copyright (C) 2014 Mike McCauley
-// $Id: RH_RF69.h,v 1.38 2020/04/09 23:40:34 mikem Exp mikem $
+// $Id: RH_RF69.h,v 1.33 2017/01/12 23:58:00 mikem Exp $
 //
 ///
 
@@ -11,6 +11,18 @@
 
 #include <RHGenericSPI.h>
 #include <RHSPIDriver.h>
+
+// If you don't want to use interupts (mainly to win one I/O pin) then
+// you just need to uncomment this line, if you're on Raspberry PI 
+// it will be set automaticly below
+//#define RH_RF69_IRQLESS
+
+#if (RH_PLATFORM == RH_PLATFORM_RASPI)
+// No IRQ used on Raspberry PI
+#ifndef RH_RF69_IRQLESS
+#define RH_RF69_IRQLESS
+#endif
+#endif // RH_PLATFORM_RASPI PI
 
 // The crystal oscillator frequency of the RF69 module
 #define RH_RF69_FXOSC 32000000.0
@@ -52,16 +64,6 @@
 
 // This is the default node address,
 #define RH_RF69_DEFAULT_NODE_ADDRESS 0
-
-// You can define the following macro (either by editing here or by passing it as a compiler definition
-// to change the default value of the ishighpowermodule argument to setTxPower to true
-// 
-// #define RFM69_HW
-#ifdef RFM69_HW
-#define RH_RF69_DEFAULT_HIGHPOWER true
-#else
-#define RH_RF69_DEFAULT_HIGHPOWER false
-#endif
 
 // Register names
 #define RH_RF69_REG_00_FIFO                                 0x00
@@ -267,35 +269,24 @@
 #define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NODE_BC      0x04
 #define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_RESERVED     0x06
 
-// RH_RF69_REG_3B_AUTOMODES
-#define RH_RF69_AUTOMODE_ENTER_COND_NONE                    0x00
-#define RH_RF69_AUTOMODE_ENTER_COND_FIFO_NOT_EMPTY          0x20
-#define RH_RF69_AUTOMODE_ENTER_COND_FIFO_LEVEL              0x40
-#define RH_RF69_AUTOMODE_ENTER_COND_CRC_OK                  0x60
-#define RH_RF69_AUTOMODE_ENTER_COND_PAYLOAD_READY           0x80
-#define RH_RF69_AUTOMODE_ENTER_COND_SYNC_ADDRESS            0xa0
-#define RH_RF69_AUTOMODE_ENTER_COND_PACKET_SENT             0xc0
-#define RH_RF69_AUTOMODE_ENTER_COND_FIFO_EMPTY              0xe0
-
-#define RH_RF69_AUTOMODE_EXIT_COND_NONE                     0x00
-#define RH_RF69_AUTOMODE_EXIT_COND_FIFO_EMPTY               0x04
-#define RH_RF69_AUTOMODE_EXIT_COND_FIFO_LEVEL               0x08
-#define RH_RF69_AUTOMODE_EXIT_COND_CRC_OK                   0x0c
-#define RH_RF69_AUTOMODE_EXIT_COND_PAYLOAD_READY            0x10
-#define RH_RF69_AUTOMODE_EXIT_COND_SYNC_ADDRESS             0x14
-#define RH_RF69_AUTOMODE_EXIT_COND_PACKET_SENT              0x18
-#define RH_RF69_AUTOMODE_EXIT_COND_TIMEOUT                  0x1c
-
-#define RH_RF69_AUTOMODE_INTERMEDIATE_MODE_SLEEP            0x00
-#define RH_RF69_AUTOMODE_INTERMEDIATE_MODE_STDBY            0x01
-#define RH_RF69_AUTOMODE_INTERMEDIATE_MODE_RX               0x02
-#define RH_RF69_AUTOMODE_INTERMEDIATE_MODE_TX               0x03
-
 // RH_RF69_REG_3C_FIFOTHRESH
 #define RH_RF69_FIFOTHRESH_TXSTARTCONDITION_NOTEMPTY        0x80
 #define RH_RF69_FIFOTHRESH_FIFOTHRESHOLD                    0x7f
 
 // RH_RF69_REG_3D_PACKETCONFIG2
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_1BIT           0x00  // Default
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_2BITS          0x10
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_4BITS          0x20
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_8BITS          0x30
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_16BITS         0x40
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_32BITS         0x50
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_64BITS         0x60
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_128BITS        0x70
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_256BITS        0x80
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_512BITS        0x90
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_1024BITS       0xA0
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_2048BITS       0xB0
+#define RH_RF69_PACKETCONFIG2_RXRESTARTDELAY_NONE           0xC0
 #define RH_RF69_PACKETCONFIG2_INTERPACKETRXDELAY            0xf0
 #define RH_RF69_PACKETCONFIG2_RESTARTRX                     0x04
 #define RH_RF69_PACKETCONFIG2_AUTORXRESTARTON               0x02
@@ -340,7 +331,7 @@
 ///   an Arduino compatible board, which include an on-board RF69 radio, external antenna, 
 ///   run on 2xAAA batteries and support low power operations. RF69 examples work without modification.
 ///   Use Arduino Board Manager to install the Talk2 code support as described in 
-///   https://bitbucket.org/talk2/whisper-node-avr. Upeload the code with an FTDI adapter set to 3.3V.
+///   https://bitbucket.org/talk2/whisper-node-avr
 /// - The excellent Adafruit Feather. These are excellent boards that are available with a variety of radios. 
 ///   We tested with the 
 ///   Feather 32u4 with RFM69HCW radio, with Arduino IDE 1.6.8 and the Adafruit AVR Boards board manager version 1.6.10.
@@ -537,44 +528,6 @@
 ///  driver.setTxPower(14);
 /// \endcode
 ///
-/// If you are connecting an RF69 to a ESP8266 board breakout board that exposes pins
-/// 12, 13, 14, 15 (ie NOT an ESP-01) you can connect like this:
-/// \code
-///                   ESP8266      RFM69W
-///                    GND-----------GND   (ground in)
-///                    VIN-----------3.3V  (3.3V in)
-/// interrupt D0 pin GPIO0-----------DIO0  (interrupt request out)
-///           SS pin GPIO15----------NSS   (chip select in)
-///      SCK SPI pin GPIO14----------SCK   (SPI clock in)
-///     MOSI SPI pin GPIO13----------MOSI  (SPI Data in)
-///     MISO SPI pin GPIO12----------MISO  (SPI Data out)
-/// \endcode
-/// and initialise with
-/// \code
-/// RH_RF69 driver(15, 0);
-/// \endcode
-/// If you are connecting an RF69 to a Sparkfun nRF52832 Breakout board 
-/// with Arduino 1.8.9 with board:
-/// "SparkFun nRF52 Boards by Sparkfun Electronics version 0.2.3",
-/// you can connect like this:
-/// \code
-///                 nRF52832     RFM69W
-///                 GND----------GND   (ground in)
-///                 3V3----------3.3V  (3.3V in)
-/// interrupt 0 pin 02-----------DIO0  (interrupt request out)
-///          SS pin 08-----------NSS   (chip select in)
-///     SCK SPI pin 13-----------SCK   (SPI clock in)
-///    MOSI SPI pin 11-----------MOSI  (SPI Data in)
-///    MISO SPI pin 12-----------MISO  (SPI Data out)
-/// \endcode
-/// and initialise with
-/// \code
-/// RHSoftwareSPI softwarespi;
-/// RH_RF69 driver(8, 2, softwarespi);
-/// and inside your setup() function:
-///    softwarespi.setPins(12, 11, 13);
-/// \endcode
-///
 /// It is possible to have 2 or more radios connected to one Arduino, provided
 /// each radio has its own SS and interrupt line (SCK, SDI and SDO are common
 /// to all radios)
@@ -593,25 +546,6 @@
 /// -random termination of communication after 5-30 packets sent/received
 /// -"fake ok" state, where initialization passes fluently, but communication doesn't happen
 /// -shields hang Arduino boards, especially during the flashing
-///
-/// \par Encryption
-///
-/// This driver support the on-chip AES encryption provided by the RF69.
-/// You can enable encryption by calling setEncryptionKey() after init() has been called.
-/// If both transmitter and receiver have been configured with the same AES key,
-/// then the receiver will recover the unencrypted message sent by the receiver.
-/// However, you should note that there is no way for RF69 nor for the RadioHead
-/// drivers to know whether the AES 
-/// key for a message is 'correct' or not. This is because the RF69 CRC covers the 
-/// _encrypted_ payload not the plaintext.
-///
-/// In RadioHead managers that support addressing,
-/// the RF69 AES encryption includes the RadioHead payload and the TO and FROM addresses, so 
-/// occasionally (average one in 256 messages), a message encrypted with the 
-/// 'wrong' key will have the 'correct' destination address, and will therefore be 
-/// accepted by RadioHead as a 'random' message content from a 'random' sender.
-/// Its up to your code to figure out whether the message makes sense or not.
-///
 /// \par Interrupts
 ///
 /// The RH_RF69 driver uses interrupts to react to events in the RF69 module,
@@ -770,6 +704,7 @@ public:
 	FSK_Rb125Fd125,    ///< FSK, Whitening, Rb = 125kbs,  Fd = 125kHz
 	FSK_Rb250Fd250,    ///< FSK, Whitening, Rb = 250kbs,  Fd = 250kHz
 	FSK_Rb55555Fd50,   ///< FSK, Whitening, Rb = 55555kbs,Fd = 50kHz for RFM69 lib compatibility
+	FSK_MOTEINO,       ///< FSK, No Whitening, Rb = 55555kbs,Fd = 50kHz, No DC-Free for RFM69 lib compatibility
 
 	GFSK_Rb2Fd5,	    ///< GFSK, Whitening, Rb = 2kbs,    Fd = 5kHz
 	GFSK_Rb2_4Fd4_8,    ///< GFSK, Whitening, Rb = 2.4kbs,  Fd = 4.8kHz
@@ -868,18 +803,12 @@ public:
     /// Sets the transmitter power output level.
     /// Be a good neighbour and set the lowest power level you need.
     /// Caution: legal power limits may apply in certain countries.
-    /// After init(), the power will be set to 13dBm for a low power module.
-    /// If you are using a high p[ower modfule such as an RFM69HW, you MUST set the power level
-    /// with the ishighpowermodule flag set to true. Else you wil get no measurable power output.
-    /// Simlarly if you are not using a high power module, you must NOT set the ishighpowermodule
-    /// (which is the default)
-    /// \param[in] power Transmitter power level in dBm. For RF69W (ishighpowermodule = false),
-    /// valid values are from -18 to +13.; Values outside this range are trimmed.
-    /// For RF69HW (ishighpowermodule = true), valid values are from -2 to +20.
-    /// Caution: at +20dBm, duty cycle is limited to 1% and a 
+    /// After init(), the power will be set to 13dBm.
+    /// \param[in] power Transmitter power level in dBm. For RF69W, valid values are from -18 to +13 
+    /// (higher power settings disable the transmitter).
+    /// For RF69HW, valid values are from +14 to +20. Caution: at +20dBm, duty cycle is limited to 1% and a 
     /// maximum VSWR of 3:1 at the antenna port.
-    /// \param ishighpowermodule Set to true if the connected module is a high power module RFM69HW
-    void           setTxPower(int8_t power, bool ishighpowermodule = RH_RF69_DEFAULT_HIGHPOWER);
+    void           setTxPower(int8_t power);
 
     /// Sets all the registers required to configure the data modem in the RF69, including the data rate, 
     /// bandwidths etc. You can use this to configure the modem with custom configurations if none of the 
@@ -892,6 +821,13 @@ public:
     /// \param[in] index The configuration choice.
     /// \return true if index is a valid choice.
     bool        setModemConfig(ModemConfigChoice index);
+
+    /// Get the values of one of the predefined modem configurations.
+    /// 
+    /// \param[in] index The configuration choice.
+    /// \param[in] config A ModemConfig structure that will contains values of the modem configuration values.
+    /// \return true if index is a valid choice and config has been filled with values
+    bool        getModemConfig(ModemConfigChoice index, ModemConfig* config);
 
     /// Starts the receiver and checks whether a received message is available.
     /// This can be called multiple times in a timeout loop
@@ -918,6 +854,13 @@ public:
     /// \return true if the message length was valid and it was correctly queued for transmit
     bool        send(const uint8_t* data, uint8_t len);
 
+    /// Blocks until the current message (if any) 
+    /// has been transmitted
+    /// \return true on success, false if the chip is not in transmit mode or other transmit failure
+#ifdef RH_RF69_IRQLESS
+    virtual bool   waitPacketSent();
+#endif
+
     /// Sets the length of the preamble
     /// in bytes. 
     /// Caution: this should be set to the same 
@@ -933,7 +876,6 @@ public:
     /// networks from each other. Default is { 0x2d, 0xd4 }.
     /// Caution: tests here show that with a single sync word (ie where len == 1), 
     /// RFM69 reception can be unreliable.
-    /// To disable sync word generation and detection, call with the defaults: setSyncWords();
     /// \param[in] syncWords Array of sync words, 1 to 4 octets long. NULL if no sync words to be used.
     /// \param[in] len Number of sync words to set, 1 to 4. 0 if no sync words to be used.
     void           setSyncWords(const uint8_t* syncWords = NULL, uint8_t len = 0);
@@ -981,24 +923,22 @@ public:
     /// \return true if sleep mode was successfully entered.
     virtual bool    sleep();
 
-    /// Return the integer value of the device type
-    /// as read from the device in from RH_RF69_REG_10_VERSION.
-    /// Expect 0x24, depending on the type of device actually
-    /// connected.
-    /// \return The integer device type
-    uint16_t deviceType() {return _deviceType;};
-
 protected:
     /// This is a low level function to handle the interrupts for one instance of RF69.
     /// Called automatically by isr*()
     /// Should not need to be called by user code.
+#ifndef RH_RF69_IRQLESS
     void           handleInterrupt();
+#endif
 
     /// Low level function to read the FIFO and put the received data into the receive buffer
     /// Should not need to be called by user code.
     void           readFifo();
 
 protected:
+
+#ifndef RH_RF69_IRQLESS
+
     /// Low level interrupt service routine for RF69 connected to interrupt 0
     static void         isr0();
 
@@ -1020,6 +960,8 @@ protected:
     /// The index into _deviceForInterrupt[] for this device (if an interrupt is already allocated)
     /// else 0xff
     uint8_t             _myInterruptIndex;
+
+#endif
 
     /// The radio OP mode to use when mode is RHModeIdle
     uint8_t             _idleMode; 
