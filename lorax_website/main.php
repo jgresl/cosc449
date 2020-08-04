@@ -8,7 +8,7 @@
    <link rel="stylesheet" href="css/reset.css">
    <link rel="stylesheet" href="css/main.css">
    <link rel="stylesheet" href="css/header.css">
-   <script type="text/javascript" src="js/admin_init_map.js"></script>
+   <link rel="stylesheet" href="css/line_chart.css">
    <script type="text/javascript" src="js/admin_modify_node.js"></script>
    <script type="text/javascript" src="js/admin_restore_db.js"></script>
    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD_ob_YSzpkQwwXup8Xwc2M9qT6-jytWJI&callback=initMap"></script>
@@ -32,8 +32,8 @@
             <br><br>
             <h3>Reports</h3>
             <ul>
-               <li><a href="main.php?command=node_map">Node Map</a></li>
-               <li><a href="main.php?command=samples">All Samples</a></li>
+               <li><a href="main.php?command=samples">Sample List</a></li>
+               <li><a href="main.php?command=line_chart">Line Chart</a></li>
             </ul>
             <br><br>
             <h3>Database</h3>
@@ -61,11 +61,11 @@
             case "nodes":
                include 'includes/adm_nodes.php';
                break;
-            case "node_map":
-               include 'includes/adm_node_map.php';
-               break;
             case "samples":
                include 'includes/adm_samples.php';
+               break;
+            case "line_chart":
+               include 'includes/adm_line_chart.php';
                break;
             case "diagram":
                include 'includes/adm_diagram.php';

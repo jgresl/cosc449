@@ -11,3 +11,4 @@
 function closeConnection($pdo){
     $pdo = null;
 }
+?>

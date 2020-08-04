@@ -1,6 +1,6 @@
-#include <Arduino.h>
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
+#include <Arduino.h>
 #include <RHReliableDatagram.h>
 #include <RH_RF95.h>
 #include <SPI.h>
@@ -11,6 +11,10 @@
 
 #include "lorax_buffer.h"
 #include "string_helper.h"
+
+/* Define sensors */
+//#define TEMPERATURE_SENSOR "bme280"
+#define TEMPERATURE_SENSOR "thermister"
 
 /* Feather M0 wiring configurations */
 #define RF95_CHIP_SELECT_PIN 8
@@ -40,6 +44,7 @@ void set_date_time(char *);
 const char *get_date_time(char *);
 void set_new_alarm();
 void set_next_sample_minute(int);
+float read_temperature();
 
 /* Create an instance of the real time clock */
 RTCZero rtc;
@@ -67,7 +72,14 @@ void setup() {
     rtc.begin();
 
     /* Begin BME280 sensor */
-    bme.begin(0x76);
+    if (strcmp(TEMPERATURE_SENSOR, "bme280") == 0) {
+        bme.begin(0x76);
+    }
+
+    /* Configure the thermister sensor */
+    if (strcmp(TEMPERATURE_SENSOR, "thermister") == 0) {
+        pinMode(A1, OUTPUT);
+    }
 
     /* Initialize LoRa radio with defined configurations */
     initialize_node();
@@ -205,10 +217,10 @@ void sync_with_gateway() {
 
             /* Store node_data and change address of RHReliable datagram driver */
             node_id = (char)node_id_response[12] - 48;
-            sample_frequency = (char)node_id_response[61] - 48;
-            transmission_frequency = (char)node_id_response[77] - 48;
+            sample_frequency = 15; //(char)node_id_response[61] - 48;
+            transmission_frequency = 60; //(char)node_id_response[77] - 48;
             Serial.printf("\n\t\t\tnode_id set to %d\n", node_id);
-            Serial.printf("\t\t\tsample_frequency set to %d\n", sample_frequency);            
+            Serial.printf("\t\t\tsample_frequency set to %d\n", sample_frequency);
             Serial.printf("\t\t\ttransmission_frequency set to %d\n", transmission_frequency);
             manager.setThisAddress(node_id);
 
@@ -223,12 +235,20 @@ void sync_with_gateway() {
 void log_samples() {
     /* Read values from sensors */
     Serial.printf("\nTaking sensor samples (every %d minutes)...\n", sample_frequency);
-    int celsius = bme.readTemperature();
-    int humidity = bme.readHumidity();
-    int pressure = bme.readPressure();
+
+    int celsius;
+    if (strcmp(TEMPERATURE_SENSOR, "bme280") == 0) {
+        celsius = bme.readTemperature() * 100;
+        //int humidity = bme.readHumidity();
+        //int pressure = bme.readPressure();
+    }
+
+    if (strcmp(TEMPERATURE_SENSOR, "thermister") == 0) {
+        celsius = read_temperature() * 100;
+    }
 
     /* Read battery voltage */
-    float battery = analogRead(VBATPIN);
+    float battery = analogRead(VBATPIN); // Dividing by 4 because resolution is changed 
     battery *= 2;     // we divided by 2, so multiply back
     battery *= 3.3;   // Multiply by 3.3V, our reference voltage
     battery /= 1024;  // convert to voltage
@@ -236,24 +256,29 @@ void log_samples() {
 
     /* Prepare payloads */
     Serial.print("\nPreparing JSON samples...\n");
+    
     /* Current Time */
     char *date_time = (char *)malloc(sizeof(char) * 19);
     get_date_time(date_time);
+
     /* Temperature */
     char temperature_sample[150];
     sprintf(temperature_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'T', date_time, celsius, sample_number);
     sample_number++;
     Serial.println(temperature_sample);
-    /* Humidity */
+
+    /* Humidity 
     char humidity_sample[150];
     sprintf(humidity_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'H', date_time, humidity, sample_number);
     sample_number++;
-    Serial.println(humidity_sample);
-    /* Air Pressure */
+    Serial.println(humidity_sample); */
+
+    /* Air Pressure 
     char pressure_sample[150];
     sprintf(pressure_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'P', date_time, pressure, sample_number);
     sample_number++;
-    Serial.println(pressure_sample);
+    Serial.println(pressure_sample); */
+
     /* Battery */
     char battery_sample[150];
     sprintf(battery_sample, "{\"node_id\":\"%d\", \"sensor_type\":\"%c\", \"date_time\":\"%s\", \"value\":\"%d\", \"sample\":\"%d\"}", node_id, 'B', date_time, battery100, sample_number);
@@ -265,8 +290,8 @@ void log_samples() {
     /* Store payloads */
     Serial.println("\nLogging JSON samples...");
     store_sample(all_samples, (uint8_t *)temperature_sample);
-    store_sample(all_samples, (uint8_t *)humidity_sample);
-    store_sample(all_samples, (uint8_t *)pressure_sample);
+    // store_sample(all_samples, (uint8_t *)humidity_sample);
+    // store_sample(all_samples, (uint8_t *)pressure_sample);
     store_sample(all_samples, (uint8_t *)battery_sample);
     print_buffer(all_samples);
 
@@ -281,8 +306,8 @@ void transmit_samples() {
     Serial.printf("\nTransmitting samples (every %d minutes)...\n", transmission_frequency);
     void *memoryLocationForQueueElement = malloc(all_samples->__element_size);
     uint16_t size = all_samples->__size;
-    
-    for (uint16_t i = 0; i < size; i++) {   
+
+    for (uint16_t i = 0; i < size; i++) {
         // Store the first element (the one being tranmitted) in the Queue and print it
         peek_sample(all_samples, (uint8_t *)memoryLocationForQueueElement);
         // If transmitted successfully
@@ -362,4 +387,35 @@ void set_next_sample_minute(int sample_frequency) {
     int current_sample_minute = rtc.getAlarmMinutes();
     int next_sample_minute = (current_sample_minute + sample_frequency) % 60;
     rtc.setAlarmMinutes(next_sample_minute);
+}
+
+float read_temperature() {
+    // Adjust ADC resolution to 12 bits  (0 - 4095)
+    analogReadResolution(12);
+
+    // Grab ADC value from sensor
+    digitalWrite(A1, HIGH);
+    delay(10);
+
+    // Take the average of 8 readings
+    int rawADC = 0;
+    for (int i = 0; i < 8; i++) {
+        rawADC += analogRead(A5);
+        delay(1);
+    }
+    rawADC /= 8;
+
+    digitalWrite(A1, LOW);
+    delay(10);
+
+    // Adjust ADC resolution to 10 bits  (0 - 1023)
+    analogReadResolution(10);
+
+    // Convert ADC to celsius
+    float a = 1.0 / 298.15;
+    float b = 1.0 / 3892.0;
+    float c = 1.0 / ((4095.0 / rawADC) - 1.0);
+    float celsius = (1.0 / (a + b * log(c))) - 273.15;
+
+    return celsius;
 }

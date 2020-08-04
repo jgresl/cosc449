@@ -1,6 +1,6 @@
 <?php
     // Prepare SQL statement
-    $sql = "UPDATE Node SET last_transmission = :last_transmission, transmission_frequency = :transmit WHERE node_ID = :node_ID";
+    $sql = "UPDATE Node SET last_transmission = :last_transmission, transmission_frequency = :transmit, sync_status = 0 WHERE node_ID = :node_ID";
     $statement = $pdo->prepare($sql);
     $statement->bindvalue(':last_transmission', $Node->last_transmission);
     $statement->bindvalue(':transmit', $transmit_new);

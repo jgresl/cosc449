@@ -34,6 +34,7 @@ int* get_node_data(char*);
 char* get_date_time();
 void print_sql_error(MYSQL*);
 void update_last_transmission(uint8_t);
+void update_last_sync(uint8_t);
 void insert_sample(char*);
 
 /* Create instance of the radio driver */
@@ -131,33 +132,46 @@ void initialize_gateway() {
 
 void relay_data() {
     if (manager.available()) {
-        /* Wait for a message addressed to us from a node */
-        uint8_t node_id, incoming_message[150];
+        uint8_t node_id;
+        uint8_t incoming_message[150];
         uint8_t incoming_message_length = sizeof(incoming_message);
+        char outgoing_message[150];
+
+        /* Wait for a message addressed to the gateway (node 100) from a node */
         if (manager.recvfromAck(incoming_message, &incoming_message_length, &node_id)) {
             printf("Received from node %d:\t\t%s\n", node_id, (char*)incoming_message);
+
+            /* Look up its serial number in the Node table */
+            /* If the serial number does not exist in the Node table then insert a new record into the Node table */
+            int* node_data = get_node_data((char*)incoming_message);
+
+            /* If the message is from node 0 (it just powered on) */
             if (node_id == 0) {
-                int* node_data = get_node_data((char*)incoming_message);
-                /* Send request_id and date_time to node */
-                char outgoing_message[150];
+                /* Sync the node by sending back the node_ID, date_time, sample_frequency, and transmission_frequency (node is listening)*/
                 sprintf(outgoing_message, "{\"node_id\":\"%d\", \"date_time\":\"%s\", \"sample\":\"%d\", \"transmit\":\"%d\"}", node_data[0], get_date_time(), node_data[1], node_data[2]);
-                printf("Sending to node %d:\t\t%s\n", node_id, outgoing_message);
+                printf("Sending to node %d for sync:\t%s\n", node_id, outgoing_message);
                 if (manager.sendtoWait((uint8_t*)outgoing_message, sizeof(outgoing_message), node_id)) {
                     printf("Received from node %d:\t\tTransmission acknowledged\n\n", node_id);
                 } else {
                     printf("Received from node %d:\t\t<no acknowledgment>\n\n", node_id);
                 }
+                update_last_sync(node_data[0]);
+                update_last_transmission(node_data[0]);
             } else {
-                /* Update last transmission in mysql Node table */
+                /* Insert sample into the Sample table */
                 insert_sample((char*)incoming_message);
+
+                /* Update last transmission in the Node table */
                 update_last_transmission(node_id);
+
+                printf("The nodes sync_status is [%d]\n\n", node_data[3]);
             }
         }
     }
     return;
 }
 
-int* get_node_data(char serial_number[]) {
+int* get_node_data(char* incoming_message) {
     char sql[150];
     uint8_t node_id;
     int sample_frequency, transmission_frequency;
@@ -169,8 +183,23 @@ int* get_node_data(char serial_number[]) {
         print_sql_error(conn);
     }
 
-    /* Query the database to see if the node serial_number is registered */
-    sprintf(sql, "SELECT node_id, sample_frequency, transmission_frequency FROM Node WHERE serial_number = '%s'", serial_number);
+    /* Parse JSON message */
+    struct json_object* parsed_json;
+    struct json_object* id;
+
+    parsed_json = json_tokener_parse(incoming_message);
+    json_object_object_get_ex(parsed_json, "node_id", &id);
+    int json_id = json_object_get_int(id);
+
+    printf("Node ID = %d\n", json_id);
+
+    if (json_id > 0) {
+        sprintf(sql, "SELECT node_ID, sample_frequency, transmission_frequency, sync_status FROM Node WHERE node_ID = %d", json_id);
+    } else {
+        sprintf(sql, "SELECT node_ID, sample_frequency, transmission_frequency, sync_status FROM Node WHERE serial_number = '%s'", incoming_message);
+    }
+
+    /* Query the database to retrieve the node data */
     if (mysql_query(conn, sql)) {
         print_sql_error(conn);
     }
@@ -179,22 +208,23 @@ int* get_node_data(char serial_number[]) {
     MYSQL_RES* result = mysql_store_result(conn);
     int num_fields = mysql_num_fields(result);
     int num_rows = mysql_num_rows(result);
-    static int node_data[3];
+    static int node_data[4];
 
     /* Check to see if the result set is empty */
     if (result == NULL) {
         print_sql_error(conn);
     } else if (num_rows == 0) {
-        sprintf(sql, "INSERT INTO Node (serial_number, last_transmission) VALUES ('%s', '%s')", serial_number, get_date_time());
+        sprintf(sql, "INSERT INTO Node (serial_number) VALUES ('%s')", incoming_message);
         mysql_query(conn, sql);
         node_id = mysql_insert_id(conn);
         printf("New node inserted at row %d\n", node_id);
         print_catalog();
     } else if (num_rows > 0) {
         MYSQL_ROW row = mysql_fetch_row(result);
-        sscanf(row[0], "%d", &node_data[0]);
-        sscanf(row[1], "%d", &node_data[1]);
-        sscanf(row[2], "%d", &node_data[2]);
+        sscanf(row[0], "%d", &node_data[0]);  // node_ID
+        sscanf(row[1], "%d", &node_data[1]);  // sample_frequency
+        sscanf(row[2], "%d", &node_data[2]);  // transmission_frequency
+        sscanf(row[3], "%d", &node_data[3]);  // sync_status
     }
 
     /* Close the database connection  */
@@ -233,9 +263,9 @@ void insert_sample(char* incoming_message) {
     int node_id = json_object_get_int(id);
     const char* sensor_type = json_object_get_string(type);
     const char* date_time = json_object_get_string(time);
-    int value = json_object_get_int(val);
+    float value = json_object_get_double(val) / 100;
     int sample = json_object_get_int(samp);
-    sprintf(sql, "INSERT INTO Sample (node_ID, sensor_type, date_time, value, sample) VALUES (%d, '%s', '%s', %d, %d)", node_id, sensor_type, date_time, value, sample);
+    sprintf(sql, "INSERT INTO Sample (node_ID, sensor_type, date_time, value, sample) VALUES (%d, '%s', '%s', %f, %d)", node_id, sensor_type, date_time, value, sample);
 
     /* A node_id > 0 indicates the JSON was parsed correctly because node 0 means unsynchronized node and should not be transmitting samples yet) */
     if (node_id > 0) {
@@ -282,8 +312,14 @@ void update_last_sync(uint8_t node_id) {
         print_sql_error(conn);
     }
 
-    /* Query the database to see if the node serial_number is registered */
+    /* Update last_sync in the Node table */
     sprintf(sql, "UPDATE Node SET last_sync = NOW() WHERE node_id = %u", node_id);
+    if (mysql_query(conn, sql)) {
+        print_sql_error(conn);
+    }
+
+    /* Update sync_status in the Node table */
+    sprintf(sql, "UPDATE Node SET sync_status = 1 WHERE node_id = %u", node_id);
     if (mysql_query(conn, sql)) {
         print_sql_error(conn);
     }
