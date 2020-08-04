@@ -145,3 +145,8 @@ figure img {
     font-weight: bold;
     font-size: .9em;
 }
+
+.sync_required {
+    color: red;
+    font-weight: bold;
+}

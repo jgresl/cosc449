@@ -134,9 +134,13 @@
             <td><input class='edit_field' name='sample' type='number' id='$Node->node_ID' value='$Node->sample_frequency'></input></td>
             <td><input class='edit_field' name='transmit' type='number' id='$Node->node_ID' value='$Node->transmission_frequency'></input></td>
             <td><input name='latitude' type='text' id='$Node->node_ID' value='$Node->gps_latitude'></input></td>
-            <td><input class='edit_field' name='longitude' type='text' id='$Node->node_ID' value='$Node->gps_longitude'></input></td>
-            <td>$Node->sync_status</td>
-            <td>$Node->last_sync</td>
+            <td><input class='edit_field' name='longitude' type='text' id='$Node->node_ID' value='$Node->gps_longitude'></input></td>";
+            if (strcmp($Node->sync_status, "Required") == 0) {
+                echo "<td class='sync_required'>$Node->sync_status</td>";
+            } else {
+                echo "<td>$Node->sync_status</td>";
+            }
+            echo "<td>$Node->last_sync</td>
             <td>$Node->last_transmission</td>
             <td>$Node->serial_number</td>
         </form></tr>";
