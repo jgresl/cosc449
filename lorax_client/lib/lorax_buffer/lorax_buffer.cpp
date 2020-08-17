@@ -129,6 +129,7 @@ void print_buffer(lorax_buffer *buffer)
         Serial.print((char*) element_bytes);
         Serial.println();
     }
+    Serial.println();
 }
 
 void free_buffer(lorax_buffer *buffer)

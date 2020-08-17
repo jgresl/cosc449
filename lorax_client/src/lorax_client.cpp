@@ -5,6 +5,7 @@
 #include <RH_RF95.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <jsmn.h>
 #include <rtcZero.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +26,7 @@
 /* LoRa radio configurations */
 #define RF95_FREQUENCY 915.0          // Between 137.0 and 1020.0   (Default = 915 Mhz)
 #define RF95_TRANSMISSION_POWER 20    // Between 5 and 23           (Default = 13 Db)
-#define RF95_CAD_TIMEOUT 10000        // Greater or equal to 0      (Default = 0 ms)
+#define RF95_CAD_TIMEOUT 1000         // Greater or equal to 0      (Default = 0 ms)
 #define RF95_SPREADING_FACTOR 12      // Between 6 and 12           (Default = ?)             --> Overwritten by setModemConfig()
 #define RF95_BANDWIDTH 125000         // Between 7800 and 500000    (Default = 125000 Hz)     --> Overwritten by setModemConfig()
 #define RF95_PREAMBLE_LENGTH 8        //                            (Default = 8)
@@ -42,6 +43,7 @@ void log_samples();
 void transmit_samples();
 void set_date_time(char *);
 const char *get_date_time(char *);
+const char *get_time(char *);
 void set_new_alarm();
 void set_next_sample_minute(int);
 float read_temperature();
@@ -64,10 +66,16 @@ lorax_buffer *all_samples = create_buffer(150, 100);
 /* Gloabal variables */
 int node_id = 0;
 int sample_number = 1;
+int transmission_counter = 1;
 int sample_frequency, transmission_frequency;
+volatile int transmission_due = 0;
 char date_time_on_sync[19];
+char time[8];
 
 void setup() {
+    /* Short delay to ensure output is viewable in the serial monitor */
+    delay(5000);
+
     /* Initialize the real time clock */
     rtc.begin();
 
@@ -85,6 +93,7 @@ void setup() {
     initialize_node();
 
     /* Sync node with gateway */
+    Serial.printf("\nSyncing with gateway...\n");
     while (node_id == 0) {
         sync_with_gateway();
     }
@@ -99,19 +108,35 @@ void setup() {
 }
 
 void loop() {
-    /* Get total seconds since device startup */
-    uint8_t totalSeconds = rtc.getHours() * 3600 + rtc.getMinutes() * 60 + rtc.getSeconds();
-
     /* Transmit samples every [transmission_frequency] minutes */
-    if (node_id > 0 && totalSeconds % (1 + 60 * transmission_frequency) == 0) {
-        transmit_samples();
+    Serial.println(transmission_counter);
+    if (node_id > 0 && transmission_counter >= transmission_frequency * 60) {
+        transmission_due = 1;
+        transmission_counter = 0;
     }
+
+    /* Transmit if transmission flag is set to true */
+    if (transmission_due) {
+        // Check the channel activity before transmitting samples
+        Serial.printf("\n[%s] Checking channel activity...\n", get_time(time));
+        if (true) {                                                                                 // @TODO: <---  rf95.waitCAD() || !rf95.isChannelActive()
+            Serial.printf("\n[%s] Channel is open, able to transmit now...\n", get_time(time));
+            transmit_samples();
+            transmission_due = 0;
+        } else {
+            Serial.printf("\n[%s] Channel is busy, delaying transmit...\n", get_time(time));
+        }
+    }
+
+    /* Increment transmission_counter */
+    transmission_counter++;
 
     /* Delay to prevent loop from running more than once per a second */
     delay(1000);
 }
 
-void initialize_node() { /* Manual reset on radio module */
+void initialize_node() {
+    /* Manual reset on radio module */
     pinMode(RF95_RESET_PIN, OUTPUT);
     digitalWrite(RF95_RESET_PIN, LOW);
     delay(10);
@@ -142,10 +167,10 @@ void initialize_node() { /* Manual reset on radio module */
     rf95.setTxPower(RF95_TRANSMISSION_POWER, false);
     Serial.printf("%d dBm\n", RF95_TRANSMISSION_POWER);
 
-    /* Set channel activity detection timeout 
-    Serial.printf("CAD timeout:\t\t\t");
+    /* Set channel activity detection timeout  */
+    Serial.printf("CAD timeout: ");
     rf95.setCADTimeout(RF95_CAD_TIMEOUT);
-    Serial.printf("%d ms\n", RF95_CAD_TIMEOUT); */
+    Serial.printf("%d ms\n", RF95_CAD_TIMEOUT);
 
     /* Set signal bandwith
     Serial.printf("Bandwidth:\t\t\t");
@@ -215,26 +240,51 @@ void sync_with_gateway() {
             Serial.print("Received from gateway:\t");
             Serial.println((char *)node_id_response);
 
-            /* Store node_data and change address of RHReliable datagram driver */
-            node_id = (char)node_id_response[12] - 48;
-            sample_frequency = 15; //(char)node_id_response[61] - 48;
-            transmission_frequency = 60; //(char)node_id_response[77] - 48;
-            Serial.printf("\n\t\t\tnode_id set to %d\n", node_id);
-            Serial.printf("\t\t\tsample_frequency set to %d\n", sample_frequency);
-            Serial.printf("\t\t\ttransmission_frequency set to %d\n", transmission_frequency);
-            manager.setThisAddress(node_id);
+            /* Parse the response from the gateway */
+            jsmn_parser parser;
+            jsmn_init(&parser);
+            jsmntok_t tokens[10];
+            int i, num_tokens;
+            char token_temp[19];
+            num_tokens = jsmn_parse(&parser, (char *)node_id_response, strlen((char *)node_id_response), tokens, 10);
 
-            /* Store date_time_on_sync and millis_elapsed_on_sync */
-            substring((char *)node_id_response, date_time_on_sync, 30, 19);
+            /* Print the token properties (for troubleshooting)
+            for (i = 0; i < num_tokens; i++) {
+                Serial.printf("tokens[%d].type = %d\n", i, tokens[i].type);
+                Serial.printf("tokens[%d].start = %d\n", i, tokens[i].start);
+                Serial.printf("tokens[%d].end = %d\n", i, tokens[i].end);
+                Serial.printf("tokens[%d].size = %d\n", i, tokens[i].size);
+            } */
+
+            /* Update node_ID */
+            substring((char *)node_id_response, token_temp, tokens[2].start + 1, tokens[2].end - tokens[2].start);
+            node_id = atoi(token_temp);
+            Serial.printf("\n\t\t\tnode_id set to %d\n", node_id);
+
+            /* Update date_time */            
+            substring((char *)node_id_response, date_time_on_sync, tokens[4].start + 1, tokens[4].end - tokens[4].start);
             set_date_time(date_time_on_sync);
             Serial.printf("\t\t\tdate_time_on_sync set to %s\n", date_time_on_sync);
+
+            /* Update sample_frequency */
+            substring((char *)node_id_response, token_temp, tokens[6].start + 1, tokens[6].end - tokens[6].start);
+            sample_frequency = atoi(token_temp);
+            Serial.printf("\t\t\tsample_frequency set to %d\n", sample_frequency);
+
+            /* Update transmission_frequency */
+            substring((char *)node_id_response, token_temp, tokens[8].start + 1, tokens[8].end - tokens[8].start);
+            transmission_frequency = atoi(token_temp);
+            Serial.printf("\t\t\ttransmission_frequency set to %d\n", transmission_frequency);
+
+            /* Set the address of RHReliable datagram driver */           
+            manager.setThisAddress(node_id);
         }
     }
 }
 
 void log_samples() {
     /* Read values from sensors */
-    Serial.printf("\nTaking sensor samples (every %d minutes)...\n", sample_frequency);
+    Serial.printf("\n[%s] Taking sensor samples (every %d minutes)...\n", get_time(time), sample_frequency);
 
     int celsius;
     if (strcmp(TEMPERATURE_SENSOR, "bme280") == 0) {
@@ -248,16 +298,16 @@ void log_samples() {
     }
 
     /* Read battery voltage */
-    float battery = analogRead(VBATPIN); // Dividing by 4 because resolution is changed 
-    battery *= 2;     // we divided by 2, so multiply back
-    battery *= 3.3;   // Multiply by 3.3V, our reference voltage
-    battery /= 1024;  // convert to voltage
+    float battery = analogRead(VBATPIN);  // Dividing by 4 because resolution is changed
+    battery *= 2;                         // we divided by 2, so multiply back
+    battery *= 3.3;                       // Multiply by 3.3V, our reference voltage
+    battery /= 1024;                      // convert to voltage
     int battery100 = battery * 100;
 
     /* Prepare payloads */
-    Serial.print("\nPreparing JSON samples...\n");
-    
-    /* Current Time */
+    Serial.print("\nPreparing JSON samples:\n");
+
+    /* Current Date Time */
     char *date_time = (char *)malloc(sizeof(char) * 19);
     get_date_time(date_time);
 
@@ -288,7 +338,7 @@ void log_samples() {
     free(date_time);
 
     /* Store payloads */
-    Serial.println("\nLogging JSON samples...");
+    Serial.println("\nLogging JSON samples:");
     store_sample(all_samples, (uint8_t *)temperature_sample);
     // store_sample(all_samples, (uint8_t *)humidity_sample);
     // store_sample(all_samples, (uint8_t *)pressure_sample);
@@ -303,30 +353,34 @@ void log_samples() {
 }
 
 void transmit_samples() {
-    Serial.printf("\nTransmitting samples (every %d minutes)...\n", transmission_frequency);
+    // Transmit all sample in the queue to the gateway
+    Serial.printf("\n[%s] Transmitting samples (every %d minutes)...\n", get_time(time), transmission_frequency);
     void *memoryLocationForQueueElement = malloc(all_samples->__element_size);
     uint16_t size = all_samples->__size;
+    int element = 0;
 
     for (uint16_t i = 0; i < size; i++) {
         // Store the first element (the one being tranmitted) in the Queue and print it
         peek_sample(all_samples, (uint8_t *)memoryLocationForQueueElement);
-        // If transmitted successfully
+
+        // Send the transmission and wait for acknowledgment
         if (manager.sendtoWait((uint8_t *)memoryLocationForQueueElement, all_samples->__element_size, RF95_GATEWAY_ID)) {
-            Serial.printf("Transmission acknowledged");
+            Serial.printf("Transmitting element %d: Acknowledged", element);
             Serial.printf("   Last RSSI: %d\n", rf95.lastRssi());
             remove_sample(all_samples, (uint8_t *)memoryLocationForQueueElement);
+            element++;
         } else {
-            // Store the element back at the end of the queue
-            Serial.printf("Transmitting element %d: <no acknowledgment>\n", i);
+            Serial.printf("Transmitting element %d: <no acknowledgment>\n", element);
         }
     }
+    Serial.printf("\n");
     free(memoryLocationForQueueElement);
 }
 
 const char *get_date_time(char *date_time) {
     char *number_string = (char *)malloc(sizeof(char) * 19);
     sprintf(
-        date_time, "%s%s-%s-%s %s:%s:%s", "20",
+        date_time, "20%s-%s-%s %s:%s:%s",
         two_digits(rtc.getYear(), number_string),
         two_digits(rtc.getMonth(), number_string + 3),
         two_digits(rtc.getDay(), number_string + 6),
@@ -335,6 +389,17 @@ const char *get_date_time(char *date_time) {
         two_digits(rtc.getSeconds(), number_string + 15));
     free(number_string);
     return date_time;
+}
+
+const char *get_time(char *time) {
+    char *number_string = (char *)malloc(sizeof(char) * 8);
+    sprintf(
+        time, "%s:%s:%s",
+        two_digits(rtc.getHours(), number_string),
+        two_digits(rtc.getMinutes(), number_string + 3),
+        two_digits(rtc.getSeconds(), number_string + 6));
+    free(number_string);
+    return time;
 }
 
 void set_date_time(char *date_time_on_sync) {

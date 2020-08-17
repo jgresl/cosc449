@@ -1,6 +1,9 @@
 <?php
+   session_start();
+   
    // Get parameters from POST
    $node_ID = $_POST['node_ID'];
+   $description_new = $_POST['description'];
    $sample_new = $_POST['sample'];
    $transmit_new = $_POST['transmit'];
    $latitude_new = $_POST['latitude'];
@@ -19,6 +22,7 @@
    include '../sql/select_node_settings.php';
    class Node
    {
+      public $description_old;
       public $last_transmission;
       public $sample_old;
       public $transmit_old;
@@ -29,7 +33,11 @@
    $Node = $statement->fetchObject('Node');
 
    // Modify node settings in database
-   session_start();
+   if ($Node->description_old != $description_new) {
+      include '../sql/update_node_description.php';
+      $_SESSION['message'] = "Description for node $node_ID has been changed from $Node->description_old to $description_new";
+   }
+
    if ($Node->sample_old != $sample_new) {
       include '../sql/update_node_sample.php';
       $_SESSION['message'] = "Sample frequency for node $node_ID has been changed from $Node->sample_old minutes to $sample_new minutes";
@@ -54,6 +62,6 @@
    closeConnection($pdo);
    
    // Redirect to new page
-   header("Location: ../main.php?command=nodes");
+   header("Location: ../main.php?command=network");
 
    ?>

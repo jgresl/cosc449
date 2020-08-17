@@ -27,7 +27,7 @@
             <br>
             <h3>Maintenance</h3>
             <ul>
-               <li><a href="main.php?command=nodes">Manage Nodes</a></li>
+               <li><a href="main.php?command=network">Manage Network</a></li>
             </ul>
             <br><br>
             <h3>Reports</h3>
@@ -58,8 +58,8 @@
       if (isset($_GET['command'])) {
          $command = $_GET['command'];
          switch ($command) {
-            case "nodes":
-               include 'includes/adm_nodes.php';
+            case "network":
+               include 'includes/adm_network.php';
                break;
             case "samples":
                include 'includes/adm_samples.php';
