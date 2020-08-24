@@ -13,9 +13,9 @@
                         $node_ID = $_GET['node'];
                         $sensor_type = $_GET['sensor'];
                     }
-
+                    
                     // Prepare SQL statement
-                    $sql = "SELECT node_ID FROM Node";
+                    $sql = "SELECT node_ID, node_description FROM Node";
                     $statement = $pdo->prepare($sql);
 
                     // Execute prepared SQL statement
@@ -25,14 +25,15 @@
                     class NodeSample
                     {
                         public $node_ID;
+                        public $node_description;
                     }
 
                     // Create option for each node_ID in Sample table
                     while ($node = $statement->fetchObject('NodeSample')) {
                         if ($node->node_ID === $node_ID) {
-                            echo "<option value=$node->node_ID selected>$node->node_ID</option>";
+                            echo "<option value=$node->node_ID selected>$node->node_ID - $node->node_description</option>";
                         } else {
-                            echo "<option value=$node->node_ID>$node->node_ID</option>";
+                            echo "<option value=$node->node_ID>$node->node_ID - $node->node_description</option>";
                         }
                     }
                     ?>

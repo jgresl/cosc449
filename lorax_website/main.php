@@ -33,7 +33,8 @@
             <h3>Reports</h3>
             <ul>
                <li><a href="main.php?command=samples">Sample List</a></li>
-               <li><a href="main.php?command=line_chart">Line Chart</a></li>
+               <li><a href="main.php?command=line_chart_d3">Line Chart - d3</a></li>
+               <li><a href="main.php?command=line_chart_plotly">Line Chart - plotly</a></li>
             </ul>
             <br><br>
             <h3>Database</h3>
@@ -64,8 +65,11 @@
             case "samples":
                include 'includes/adm_samples.php';
                break;
-            case "line_chart":
-               include 'includes/adm_line_chart.php';
+            case "line_chart_d3":
+               include 'includes/adm_line_chart_d3.php';
+               break;
+            case "line_chart_plotly":
+               include 'includes/adm_line_chart_plotly.php';
                break;
             case "diagram":
                include 'includes/adm_diagram.php';

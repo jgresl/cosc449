@@ -35,41 +35,41 @@ while ($sample = $statement->fetchObject('Sample')) {
     array_push($temperature, $sample->value);
     array_push($date_time, $sample->date_time);
 }
-
 ?>
 
 <div id="column2">
     <article style="height:550px">
-        <h1>Time Series Line Chart</h1><br>
+        <h1>Time Series Line Chart - d3</h1><br>
 
         <div class="filter_row">
             <form method="get" action="main.php">
                 <label>Node:</label>
-                <input type="hidden" name="command" value="line_chart"></input>
+                <input type="hidden" name="command" value="line_chart_d3"></input>
                 <select name="node">
                     <?php
 
-                        // Prepare SQL statement
-                        $sql = "SELECT node_ID FROM Node";
-                        $statement = $pdo->prepare($sql);
+                    // Prepare SQL statement
+                    $sql = "SELECT node_ID, node_description FROM Node";
+                    $statement = $pdo->prepare($sql);
 
-                        // Execute prepared SQL statement
-                        $statement->execute();
+                    // Execute prepared SQL statement
+                    $statement->execute();
 
-                        // Build class to store result set attributes
-                        class NodeSample
-                        {
-                            public $node_ID;
+                    // Build class to store result set attributes
+                    class NodeSample
+                    {
+                        public $node_ID;
+                        public $node_description;
+                    }
+
+                    // Create option for each node_ID in Sample table
+                    while ($node = $statement->fetchObject('NodeSample')) {
+                        if ($node->node_ID === $node_ID) {
+                            echo "<option value=$node->node_ID selected>$node->node_ID - $node->node_description</option>";
+                        } else {
+                            echo "<option value=$node->node_ID>$node->node_ID - $node->node_description</option>";
                         }
-                        
-                        // Create option for each node_ID in Sample table
-                        while ($node = $statement->fetchObject('NodeSample')) {
-                            if ($node->node_ID === $node_ID) {
-                                echo "<option value=$node->node_ID selected>$node->node_ID</option>";
-                            } else {
-                                echo "<option value=$node->node_ID>$node->node_ID</option>";
-                            }    
-                        }
+                    }
                     ?>
                 </select>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 

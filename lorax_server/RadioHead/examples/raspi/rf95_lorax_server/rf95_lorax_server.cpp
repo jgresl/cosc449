@@ -214,7 +214,7 @@ int* get_node_data(char* incoming_message) {
     if (result == NULL) {
         print_sql_error(conn);
     } else if (num_rows == 0) {
-        sprintf(sql, "INSERT INTO Node (serial_number, gps_latitude, gps_longitude) VALUES ('%s', null, null)", incoming_message);
+        sprintf(sql, "INSERT INTO Node (serial_number) VALUES ('%s')", incoming_message);
         mysql_query(conn, sql);
         node_id = mysql_insert_id(conn);
         printf("New node inserted at row %d\n", node_id);

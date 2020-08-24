@@ -28,7 +28,6 @@
       public $transmit_old;
       public $latitude_old;
       public $longitude_old;
-
    }
    $Node = $statement->fetchObject('Node');
 

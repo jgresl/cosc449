@@ -22,7 +22,6 @@
       public $description_old;
       public $latitude_old;
       public $longitude_old;
-
    }
    $Gateway = $statement->fetchObject('Gateway');
 
@@ -47,5 +46,3 @@
    
    // Redirect to new page
    header("Location: ../main.php?command=network");
-
-   ?>
